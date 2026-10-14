@@ -68,6 +68,11 @@ uv run ksa-evals compare results/<before> results/<after>
 
 Each run writes `results/<timestamp>-<label>/` with `trials.jsonl` (every transcript, check and verdict), `summary.json`, and `report.md` (failures with evidence and transcripts).
 
+
+## CI
+
+Push and pull request runs execute the offline test suite (`uv run pytest`) via GitHub Actions (`.github/workflows/test.yml`).
+
 ## Results: what the first runs found and changed
 
 Three full runs, 40 scenarios × 3 trials each, against the same eval tenants (October 2026):
@@ -97,3 +102,7 @@ Three full runs, 40 scenarios × 3 trials each, against the same eval tenants (O
 - Some angry customers are still promised free return visits without a stated warranty.
 
 **Caveats.** 3 trials per scenario is enough to see large effects (69 → 0 truncated replies) but not small ones; a few points of pass rate between runs is within noise. The judge agreed with 22/22 hand labels in calibration, but that set is small and its cases are fairly clear-cut.
+
+## License
+
+[MIT](LICENSE) © 2026 Jacob Legorreta
