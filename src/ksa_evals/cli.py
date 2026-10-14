@@ -71,7 +71,7 @@ def cmd_run(args) -> int:
     meta = {"label": args.label, "agent_url": s.agent_url, "caller_model": s.caller_model, "judge_model": s.judge_model, "repeats": args.repeats}
     summary = summarize(results, scenarios, meta)
     out = write_run(s.results_dir, args.label, results, summary)
-    print(f"\nPass rate {pct(summary['pass_rate'])} · {summary['scenarios_all_passed']}/{summary['scenarios_total']} scenarios passed every trial · {summary['harness_errors']} harness errors")
+    print(f"\nPass rate {pct(summary['pass_rate'])} · Tool-call accuracy {pct(summary.get('tool_call_accuracy'))} · {summary['scenarios_all_passed']}/{summary['scenarios_total']} scenarios passed every trial · {summary['harness_errors']} harness errors")
     print(f"Report: {out / 'report.md'}")
     if summary["graded"] == 0:
         print("No trials were successfully scored", file=sys.stderr)

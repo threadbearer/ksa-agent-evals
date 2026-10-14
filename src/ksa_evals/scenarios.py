@@ -38,6 +38,8 @@ class Scenario(BaseModel):
     max_turns: int = 6
     criteria: list[Criterion]
     checks: list[Check] = Field(default_factory=list)
+    expected_tools: list[str] = Field(default_factory=list)
+    forbidden_tools: list[str] = Field(default_factory=list)
 
 
 class Business(BaseModel):

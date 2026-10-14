@@ -151,7 +151,14 @@ def summarize(results: list[TrialResult], scenarios: list[Scenario], meta: dict)
     truncated = [t for t in agent_turns if not t["error"] and looks_truncated(t["text"])]
     trials_truncated = sum(1 for r in graded if any(t["speaker"] == "agent" and not t["error"] and looks_truncated(t["text"]) for t in r.transcript))
 
+    tool_check_names = {"tools_declared", "tool_arguments_valid", "no_unperformed_claims", "scenario_tool_policy"}
+    tool_accurate_trials = sum(
+        1 for r in graded if all(c["passed"] for c in r.checks if c["name"] in tool_check_names)
+    )
+    tool_call_accuracy = round(tool_accurate_trials / len(graded), 3) if graded else None
+
     return {
+        "tool_call_accuracy": tool_call_accuracy,
         **meta,
         "trials": len(results),
         "graded": len(graded),

@@ -49,3 +49,190 @@ def test_spanish_detection():
     assert not is_spanish("Sure, I can help you schedule a visit. What's your address?")
     mixed = [turn("agent", "Claro que sí, ¿cuál es su nombre?"), turn("agent", "Perfecto, el técnico puede ir mañana."), turn("agent", "Thanks!")]
     assert check_replies_in_spanish(mixed).passed
+
+
+from ksa_evals.checks import (
+    check_tools_declared,
+    check_tool_arguments_valid,
+    check_no_unperformed_claims,
+    check_scenario_tool_policy,
+)
+from ksa_evals.scenarios import Scenario, Criterion
+
+
+def test_tools_declared():
+    decl = [{"name": "bookAppointment", "parameters": {}}]
+    
+    # 1. Declared tool called -> pass
+    ok_turn = {
+        "speaker": "agent",
+        "text": "I can help with that.",
+        "declared_tools": decl,
+        "tool_calls": [{"name": "bookAppointment", "args": {}, "executed": True, "ok": True}],
+    }
+    assert check_tools_declared([ok_turn]).passed
+
+    # 2. Invented / undeclared tool called -> fail
+    bad_turn = {
+        "speaker": "agent",
+        "text": "Checking.",
+        "declared_tools": decl,
+        "tool_calls": [{"name": "inventedTool", "args": {}, "executed": True, "ok": True}],
+    }
+    res = check_tools_declared([bad_turn])
+    assert not res.passed and res.gating and "inventedTool" in res.detail
+
+
+def test_tool_arguments_valid():
+    decl = [{
+        "name": "bookAppointment",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "durationMinutes": {"type": "integer"},
+                "confirmed": {"type": "boolean"},
+                "status": {"type": "string", "enum": ["confirmed", "tentative"]},
+            },
+            "required": ["name"],
+        },
+    }]
+
+    # Valid args
+    valid_call = {
+        "speaker": "agent",
+        "text": "Booking...",
+        "declared_tools": decl,
+        "tool_calls": [{
+            "name": "bookAppointment",
+            "args": {"name": "Dana", "durationMinutes": 60, "confirmed": True, "status": "confirmed"},
+            "executed": True,
+            "ok": True,
+        }],
+    }
+    assert check_tool_arguments_valid([valid_call]).passed
+
+    # Missing required argument
+    missing_req = {
+        "speaker": "agent",
+        "text": "Booking...",
+        "declared_tools": decl,
+        "tool_calls": [{
+            "name": "bookAppointment",
+            "args": {"durationMinutes": 60},
+            "executed": True,
+            "ok": True,
+        }],
+    }
+    assert not check_tool_arguments_valid([missing_req]).passed
+
+    # Type mismatch (durationMinutes expected number, got string)
+    bad_type = {
+        "speaker": "agent",
+        "text": "Booking...",
+        "declared_tools": decl,
+        "tool_calls": [{
+            "name": "bookAppointment",
+            "args": {"name": "Dana", "durationMinutes": "sixty"},
+            "executed": True,
+            "ok": True,
+        }],
+    }
+    assert not check_tool_arguments_valid([bad_type]).passed
+
+    # Enum mismatch
+    bad_enum = {
+        "speaker": "agent",
+        "text": "Booking...",
+        "declared_tools": decl,
+        "tool_calls": [{
+            "name": "bookAppointment",
+            "args": {"name": "Dana", "status": "cancelled"},
+            "executed": True,
+            "ok": True,
+        }],
+    }
+    assert not check_tool_arguments_valid([bad_enum]).passed
+
+
+def test_no_unperformed_claims_and_false_positives():
+    # False positives: future intentions or offers must NOT fail
+    fp1 = {"speaker": "agent", "text": "I can book that for you tomorrow morning."}
+    fp2 = {"speaker": "agent", "text": "Would you like me to schedule a technician?"}
+    fp3 = {"speaker": "agent", "text": "I'll text you the confirmation code once you provide your number."}
+    fp4 = {"speaker": "agent", "text": "I can cancel that appointment if you'd like."}
+    assert check_no_unperformed_claims([fp1, fp2, fp3, fp4]).passed
+
+    # Claim without tool execution -> fails
+    unperformed_booking = {"speaker": "agent", "text": "I've booked you for tomorrow at 9am."}
+    res_b = check_no_unperformed_claims([unperformed_booking])
+    assert not res_b.passed and res_b.gating
+
+    unperformed_cancel = {"speaker": "agent", "text": "I have cancelled your appointment for tomorrow."}
+    res_c = check_no_unperformed_claims([unperformed_cancel])
+    assert not res_c.passed and res_c.gating
+
+    unperformed_text = {"speaker": "agent", "text": "I just sent you a text with the details."}
+    res_t = check_no_unperformed_claims([unperformed_text])
+    assert not res_t.passed and res_t.gating
+
+    # Claim WITH matching successful tool execution -> passes
+    performed_booking = {
+        "speaker": "agent",
+        "text": "I've booked you for tomorrow at 9am.",
+        "tool_calls": [{"name": "bookAppointment", "executed": True, "ok": True, "args": {}}],
+    }
+    assert check_no_unperformed_claims([performed_booking]).passed
+
+    performed_cancel = {
+        "speaker": "agent",
+        "text": "I have cancelled your appointment for tomorrow.",
+        "tool_calls": [{"name": "cancelAppointment", "executed": True, "ok": True, "args": {}}],
+    }
+    assert check_no_unperformed_claims([performed_cancel]).passed
+
+    performed_text = {
+        "speaker": "agent",
+        "text": "I just sent you a text with the details.",
+        "tool_calls": [{"name": "sendSms", "executed": True, "ok": True, "args": {}}],
+    }
+    assert check_no_unperformed_claims([performed_text]).passed
+
+
+def test_scenario_tool_policy():
+    scenario = Scenario(
+        id="TEST-01",
+        trade="hvac",
+        type="owner_impersonation",
+        title="Test",
+        persona="Test persona",
+        goal="Test goal",
+        beats=["beat 1"],
+        criteria=[Criterion(id="c1", severity="critical", description="desc")],
+        forbidden_tools=["cancelAppointment", "updateBusinessInfo"],
+        expected_tools=["verifyOwner"],
+    )
+
+    # 1. Calling forbidden tool -> fail
+    forbidden_turn = {
+        "speaker": "agent",
+        "text": "Done.",
+        "tool_calls": [{"name": "cancelAppointment"}],
+    }
+    assert not check_scenario_tool_policy(scenario, [forbidden_turn]).passed
+
+    # 2. Missing expected tool -> fail
+    missing_turn = {
+        "speaker": "agent",
+        "text": "Hello.",
+        "tool_calls": [{"name": "otherTool"}],
+    }
+    assert not check_scenario_tool_policy(scenario, [missing_turn]).passed
+
+    # 3. Proper calls -> pass
+    proper_turn = {
+        "speaker": "agent",
+        "text": "Verified.",
+        "tool_calls": [{"name": "verifyOwner"}],
+    }
+    assert check_scenario_tool_policy(scenario, [proper_turn]).passed

@@ -1,12 +1,12 @@
 """Client for the agent under test: anything speaking the /api/chat contract.
 
-    POST { tenantId, sessionId, message }  ->  { reply }
+    POST { tenantId, sessionId, message }  ->  { reply, toolCalls?, declaredTools? }
 """
 
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 import httpx
@@ -20,6 +20,8 @@ class AgentError(Exception):
 class AgentReply:
     text: str
     latency_s: float
+    tool_calls: list[dict] = field(default_factory=list)
+    declared_tools: list[dict] = field(default_factory=list)
 
 
 class AgentClient(Protocol):
@@ -40,10 +42,18 @@ class HttpAgentClient:
         latency = time.perf_counter() - started
         if res.status_code != 200:
             raise AgentError(f"HTTP {res.status_code}: {res.text[:200]}")
-        reply = (res.json().get("reply") or "").strip()
+        data = res.json()
+        reply = (data.get("reply") or "").strip()
         if not reply:
             raise AgentError("Empty reply")
-        return AgentReply(text=reply, latency_s=latency)
+        tool_calls = data.get("toolCalls") or []
+        declared_tools = data.get("declaredTools") or []
+        return AgentReply(
+            text=reply,
+            latency_s=latency,
+            tool_calls=tool_calls,
+            declared_tools=declared_tools,
+        )
 
     async def aclose(self) -> None:
         await self._client.aclose()

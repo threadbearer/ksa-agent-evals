@@ -62,10 +62,17 @@ def build_trial_graph(caller: CallerFn, agent: AgentClient, judge: JudgeFn):
         last = state["transcript"][-1]["text"]
         try:
             reply = await agent.send(state["tenant_id"], state["session_id"], last)
-            turn = Turn(speaker="agent", text=reply.text, latency_s=reply.latency_s, error=None)
+            turn = Turn(
+                speaker="agent",
+                text=reply.text,
+                latency_s=reply.latency_s,
+                error=None,
+                tool_calls=reply.tool_calls,
+                declared_tools=reply.declared_tools,
+            )
             ended = None
         except AgentError as err:
-            turn = Turn(speaker="agent", text="", latency_s=None, error=str(err))
+            turn = Turn(speaker="agent", text="", latency_s=None, error=str(err), tool_calls=[], declared_tools=[])
             ended = "agent_error"
         if ended is None and state.get("caller_turns", 0) >= state["scenario"].max_turns:
             ended = "max_turns"
