@@ -31,7 +31,7 @@ def load_settings() -> Settings:
     return Settings(
         agent_url=os.getenv("AGENT_URL", "http://127.0.0.1:8787/chat"),
         tenants=json.loads(targets.read_text()) if targets.exists() else {},
-        caller_model=os.getenv("CALLER_MODEL", "gemini-2.0-flash-lite"),
+        caller_model=os.getenv("CALLER_MODEL", "gemini-2.5-flash"),
         judge_model=os.getenv("JUDGE_MODEL", "gemini-2.5-flash"),
         api_key=os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"),
         results_dir=ROOT / "results",
