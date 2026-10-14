@@ -26,6 +26,10 @@ class VerdictBody(BaseModel):
 
 class CriterionVerdict(VerdictBody):
     id: str
+    # Recorded verdicts can also be "not_judged": the trial had already failed a
+    # gating check, so the judge was skipped. The judge's own schema (VerdictBody)
+    # can't produce it.
+    verdict: Literal["pass", "fail", "not_applicable", "not_judged"]
 
 
 class AxisScores(BaseModel):
@@ -37,7 +41,7 @@ class AxisScores(BaseModel):
 
 class Judgment(BaseModel):
     criteria: list[CriterionVerdict]
-    scores: AxisScores
+    scores: AxisScores | None = None  # None when the trial wasn't judged
     summary: str = Field(description="One sentence on how the agent did.")
 
 

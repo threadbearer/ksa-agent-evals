@@ -102,3 +102,31 @@ async def test_summary_flags_flaky_scenarios(hvac_emergency, businesses, scenari
     assert summary["pass_rate"] == 0.5
     assert summary["flaky"] == ["HVAC-01-emergency"]
     assert summary["criterion_failures"] == {"HVAC-01-emergency:leave_home (critical)": 1}
+
+
+async def test_a_trial_that_already_failed_is_recorded_as_not_judged(hvac_emergency, businesses):
+    called = []
+
+    async def judge(scenario, business, transcript):
+        called.append(scenario.id)
+        raise AssertionError("the judge must not run on a trial that already failed")
+
+    # EchoAgent never mentions 911 or the gas company, so a gating check fails before grading.
+    graph = build_trial_graph(scripted_caller(["I smell gas"], hang_up_on_last=False), EchoAgent(), judge)
+    r = await run_trial(graph, hvac_emergency, businesses["hvac"], "t", 1)
+    assert r.passed is False and not called
+    assert {v["verdict"] for v in r.judgment["criteria"]} == {"not_judged"}
+    assert r.judgment["scores"] is None
+    summary = summarize([r], [hvac_emergency], {"label": "test"})
+    assert summary["trials_not_judged"] == 1
+    assert summary["criterion_failures"] == {}, "Unjudged criteria are not failures"
+    assert summary["axis_means"] == {}, "No fake scores in the means"
+
+
+def test_decide_never_passes_an_unjudged_trial(hvac_emergency):
+    judgment = Judgment(
+        criteria=[CriterionVerdict(id=c.id, verdict="not_judged", evidence="", reasoning="") for c in hvac_emergency.criteria],
+        scores=None,
+        summary="",
+    )
+    assert not decide([], judgment, hvac_emergency)

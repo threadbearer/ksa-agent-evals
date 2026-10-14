@@ -14,7 +14,7 @@ def render_report(summary: dict, results: list[TrialResult]) -> str:
         f"# Exam run: {summary.get('label', '')}",
         "",
         f"- Agent: `{summary.get('agent_url')}` · caller `{summary.get('caller_model')}` · judge `{summary.get('judge_model')}`",
-        f"- Trials: {summary['trials']} ({summary['graded']} graded, {summary['harness_errors']} harness errors) · repeats per scenario: {summary.get('repeats')}",
+        f"- Trials: {summary['trials']} ({summary['graded']} graded, {summary.get('trials_not_judged', 0)} not judged because they had already failed, {summary['harness_errors']} harness errors) · repeats per scenario: {summary.get('repeats')}",
         f"- **Pass rate: {pct(summary['pass_rate'])}** · Tool-call accuracy: {pct(summary.get('tool_call_accuracy'))} ({summary.get('tool_calls_total', 0)} calls in {summary.get('tool_trials', 0)} trials) · scenarios passing every trial: {summary['scenarios_all_passed']}/{summary['scenarios_total']}",
         f"- Agent turns: {summary['agent_turns']} · agent errors: {summary['agent_errors']} · replies cut off mid-sentence: {summary.get('truncated_replies', '—')} (in {summary.get('trials_with_truncated_reply', '—')} trials) · latency p50 {summary['latency_p50_s']}s / p95 {summary['latency_p95_s']}s",
         f"- Axis means (1-10): " + ", ".join(f"{k} {v}" for k, v in summary["axis_means"].items()),

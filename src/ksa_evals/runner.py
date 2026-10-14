@@ -169,6 +169,10 @@ def summarize(results: list[TrialResult], scenarios: list[Scenario], meta: dict)
         **meta,
         "trials": len(results),
         "graded": len(graded),
+        # Failed before grading (agent error or a gating check), so the judge was skipped.
+        "trials_not_judged": sum(
+            1 for r in graded if any(v.get("verdict") == "not_judged" for v in (r.judgment or {}).get("criteria", []))
+        ),
         "harness_errors": len(results) - len(graded),
         "pass_rate": rate(results),
         "scenarios_all_passed": sum(1 for row in scenario_rows if row["graded"] and row["passes"] == row["graded"]),
