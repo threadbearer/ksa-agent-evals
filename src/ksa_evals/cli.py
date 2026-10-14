@@ -73,6 +73,12 @@ def cmd_run(args) -> int:
     out = write_run(s.results_dir, args.label, results, summary)
     print(f"\nPass rate {pct(summary['pass_rate'])} · {summary['scenarios_all_passed']}/{summary['scenarios_total']} scenarios passed every trial · {summary['harness_errors']} harness errors")
     print(f"Report: {out / 'report.md'}")
+    if summary["graded"] == 0:
+        print("No trials were successfully scored", file=sys.stderr)
+        return 1
+    if summary["harness_errors"] > 0:
+        print(f"Harness encountered {summary['harness_errors']} error(s)", file=sys.stderr)
+        return 1
     if args.min_pass_rate is not None and (summary["pass_rate"] or 0) < args.min_pass_rate:
         print(f"Below --min-pass-rate {args.min_pass_rate}", file=sys.stderr)
         return 1
