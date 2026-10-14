@@ -1,0 +1,6 @@
+{
+  "hvac": "<tenant uuid>",
+  "plumbing": "<tenant uuid>",
+  "electrical": "<tenant uuid>",
+  "roofing": "<tenant uuid>"
+}
