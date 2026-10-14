@@ -163,6 +163,7 @@ def check_tool_arguments_valid(transcript: list[Turn]) -> CheckResult:
                 continue
             params = decl.get("parameters") or {}
             properties = params.get("properties") or {}
+            # Gemini declarations use upper-case types ("STRING", "OBJECT").
             required = params.get("required") or []
             args = call.get("args") or {}
 
@@ -173,7 +174,7 @@ def check_tool_arguments_valid(transcript: list[Turn]) -> CheckResult:
             for arg_name, arg_val in args.items():
                 if arg_name in properties:
                     prop = properties[arg_name]
-                    prop_type = prop.get("type")
+                    prop_type = str(prop.get("type") or "").lower()
                     if prop_type == "string" and not isinstance(arg_val, str):
                         return CheckResult("tool_arguments_valid", False, True, f"Tool '{name}' argument '{arg_name}' expected string, got {type(arg_val).__name__}")
                     if prop_type in ("integer", "number"):
@@ -189,31 +190,37 @@ def check_tool_arguments_valid(transcript: list[Turn]) -> CheckResult:
 
 
 def check_no_unperformed_claims(transcript: list[Turn]) -> CheckResult:
+    # Cumulative: "you're all booked" two turns after a successful booking is true.
+    successful_names: set[str] = set()
     for t in agent_turns(transcript):
         text = t.get("text", "")
         calls = t.get("tool_calls") or []
-        successful_names = {c.get("name", "") for c in calls if c.get("executed") and c.get("ok")}
+        successful_names |= {c.get("name", "") for c in calls if c.get("executed") and c.get("ok")}
 
         for pat in CLAIMED_BOOKING_PATTERNS:
             m = re.search(pat, text, re.IGNORECASE)
             if m:
                 has_booking = any("book" in name.lower() or "schedule" in name.lower() for name in successful_names)
                 if not has_booking:
-                    return CheckResult("no_unperformed_claims", False, True, f"Agent claimed booking ('{m.group(0)}') without successful booking tool execution that turn")
+                    return CheckResult("no_unperformed_claims", False, True, f"Agent claimed booking ('{m.group(0)}') without a successful booking tool call so far")
 
         for pat in CLAIMED_CANCEL_PATTERNS:
             m = re.search(pat, text, re.IGNORECASE)
             if m:
                 has_cancel = any("cancel" in name.lower() for name in successful_names)
                 if not has_cancel:
-                    return CheckResult("no_unperformed_claims", False, True, f"Agent claimed cancellation ('{m.group(0)}') without successful cancel tool execution that turn")
+                    return CheckResult("no_unperformed_claims", False, True, f"Agent claimed cancellation ('{m.group(0)}') without a successful cancel tool call so far")
 
         for pat in CLAIMED_TEXT_PATTERNS:
             m = re.search(pat, text, re.IGNORECASE)
             if m:
-                has_text = any("sms" in name.lower() or "text" in name.lower() or "message" in name.lower() for name in successful_names)
+                # Texting tools are named send* (sendVerificationCode, send_signup_link, …).
+                has_text = any(
+                    name.lower().startswith("send") or any(w in name.lower() for w in ("sms", "text", "message"))
+                    for name in successful_names
+                )
                 if not has_text:
-                    return CheckResult("no_unperformed_claims", False, True, f"Agent claimed text sent ('{m.group(0)}') without successful SMS/text tool execution that turn")
+                    return CheckResult("no_unperformed_claims", False, True, f"Agent claimed text sent ('{m.group(0)}') without a successful texting tool call so far")
 
     return CheckResult("no_unperformed_claims", True, True)
 

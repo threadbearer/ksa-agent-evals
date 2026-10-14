@@ -236,3 +236,35 @@ def test_scenario_tool_policy():
         "tool_calls": [{"name": "verifyOwner"}],
     }
     assert check_scenario_tool_policy(scenario, [proper_turn]).passed
+
+
+def test_claims_count_tool_calls_from_earlier_turns():
+    booked = {
+        "speaker": "agent",
+        "text": "Done, I've booked you for Tuesday at 2pm.",
+        "tool_calls": [{"name": "bookAppointment", "executed": True, "ok": True, "args": {}}],
+    }
+    later = {"speaker": "agent", "text": "Yes, you're all booked for Tuesday at 2pm."}
+    assert check_no_unperformed_claims([booked, {"speaker": "caller", "text": "What time again?"}, later]).passed
+
+
+def test_text_claim_accepts_send_tools():
+    sent = {
+        "speaker": "agent",
+        "text": "I've just sent you a text with a code.",
+        "tool_calls": [{"name": "sendVerificationCode", "executed": True, "ok": True, "args": {}}],
+    }
+    assert check_no_unperformed_claims([sent]).passed
+
+
+def test_argument_types_checked_for_gemini_uppercase_schemas():
+    declared = [{
+        "name": "triggerSafetyProtocol",
+        "parameters": {"type": "OBJECT", "properties": {"hazard": {"type": "STRING"}}, "required": ["hazard"]},
+    }]
+    bad = {"speaker": "agent", "text": "...", "declared_tools": declared,
+           "tool_calls": [{"name": "triggerSafetyProtocol", "args": {"hazard": 3}, "executed": True, "ok": False}]}
+    good = {"speaker": "agent", "text": "...", "declared_tools": declared,
+            "tool_calls": [{"name": "triggerSafetyProtocol", "args": {"hazard": "gasSmell"}, "executed": True, "ok": True}]}
+    assert not check_tool_arguments_valid([bad]).passed
+    assert check_tool_arguments_valid([good]).passed

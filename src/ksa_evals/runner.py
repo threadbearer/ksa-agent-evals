@@ -151,14 +151,21 @@ def summarize(results: list[TrialResult], scenarios: list[Scenario], meta: dict)
     truncated = [t for t in agent_turns if not t["error"] and looks_truncated(t["text"])]
     trials_truncated = sum(1 for r in graded if any(t["speaker"] == "agent" and not t["error"] and looks_truncated(t["text"]) for t in r.transcript))
 
+    # Only trials where the agent actually called a tool count: a trial with no
+    # calls passes the tool checks vacuously, and a run recorded before the bridge
+    # reported tool calls has none — that is "not measured", not 100%.
     tool_check_names = {"tools_declared", "tool_arguments_valid", "no_unperformed_claims", "scenario_tool_policy"}
+    tool_trials = [r for r in graded if any(t.get("tool_calls") for t in r.transcript)]
     tool_accurate_trials = sum(
-        1 for r in graded if all(c["passed"] for c in r.checks if c["name"] in tool_check_names)
+        1 for r in tool_trials if all(c["passed"] for c in r.checks if c["name"] in tool_check_names)
     )
-    tool_call_accuracy = round(tool_accurate_trials / len(graded), 3) if graded else None
+    tool_call_accuracy = round(tool_accurate_trials / len(tool_trials), 3) if tool_trials else None
+    tool_calls_total = sum(len(t.get("tool_calls") or []) for r in graded for t in r.transcript)
 
     return {
         "tool_call_accuracy": tool_call_accuracy,
+        "tool_trials": len(tool_trials),
+        "tool_calls_total": tool_calls_total,
         **meta,
         "trials": len(results),
         "graded": len(graded),
