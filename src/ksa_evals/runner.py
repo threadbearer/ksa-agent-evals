@@ -162,10 +162,25 @@ def summarize(results: list[TrialResult], scenarios: list[Scenario], meta: dict)
     tool_call_accuracy = round(tool_accurate_trials / len(tool_trials), 3) if tool_trials else None
     tool_calls_total = sum(len(t.get("tool_calls") or []) for r in graded for t in r.transcript)
 
+    # Token usage the product reported for each reply (absent on older runs).
+    usages = [t["usage"] for r in results for t in r.transcript if t.get("speaker") == "agent" and t.get("usage")]
+    agent_tokens = None
+    if usages:
+        totals = {k: sum(u.get(k, 0) for u in usages) for k in ("calls", "promptTokens", "cachedTokens", "outputTokens", "thoughtsTokens")}
+        agent_tokens = {
+            "model": next((u.get("model") for u in usages if u.get("model")), None),
+            "replies": len(usages),
+            **totals,
+            "per_reply_in": round(totals["promptTokens"] / len(usages)),
+            "per_reply_out": round((totals["outputTokens"] + totals["thoughtsTokens"]) / len(usages)),
+            "cached_share": round(totals["cachedTokens"] / totals["promptTokens"], 3) if totals["promptTokens"] else None,
+        }
+
     return {
         "tool_call_accuracy": tool_call_accuracy,
         "tool_trials": len(tool_trials),
         "tool_calls_total": tool_calls_total,
+        "agent_tokens": agent_tokens,
         **meta,
         "trials": len(results),
         "graded": len(graded),

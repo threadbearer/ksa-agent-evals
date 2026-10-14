@@ -22,6 +22,7 @@ class AgentReply:
     latency_s: float
     tool_calls: list[dict] = field(default_factory=list)
     declared_tools: list[dict] = field(default_factory=list)
+    usage: dict | None = None  # the product's token counts for this reply, if it reports them
 
 
 class AgentClient(Protocol):
@@ -53,6 +54,7 @@ class HttpAgentClient:
             latency_s=latency,
             tool_calls=tool_calls,
             declared_tools=declared_tools,
+            usage=data.get("usage") or None,
         )
 
     async def aclose(self) -> None:

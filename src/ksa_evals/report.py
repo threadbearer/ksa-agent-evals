@@ -9,6 +9,11 @@ def pct(x: float | None) -> str:
     return "—" if x is None else f"{x * 100:.0f}%"
 
 
+def _tok(summary: dict) -> str:
+    a = summary.get("agent_tokens")
+    return f"{a['per_reply_in']} / {a['per_reply_out']}" if a else "—"
+
+
 def render_report(summary: dict, results: list[TrialResult]) -> str:
     lines = [
         f"# Exam run: {summary.get('label', '')}",
@@ -17,6 +22,7 @@ def render_report(summary: dict, results: list[TrialResult]) -> str:
         f"- Trials: {summary['trials']} ({summary['graded']} graded, {summary.get('trials_not_judged', 0)} not judged because they had already failed, {summary['harness_errors']} harness errors) · repeats per scenario: {summary.get('repeats')}",
         f"- **Pass rate: {pct(summary['pass_rate'])}** · Tool-call accuracy: {pct(summary.get('tool_call_accuracy'))} ({summary.get('tool_calls_total', 0)} calls in {summary.get('tool_trials', 0)} trials) · scenarios passing every trial: {summary['scenarios_all_passed']}/{summary['scenarios_total']}",
         f"- Agent turns: {summary['agent_turns']} · agent errors: {summary['agent_errors']} · replies cut off mid-sentence: {summary.get('truncated_replies', '—')} (in {summary.get('trials_with_truncated_reply', '—')} trials) · latency p50 {summary['latency_p50_s']}s / p95 {summary['latency_p95_s']}s",
+        *([f"- Agent tokens per reply ({a['model']}): {a['per_reply_in']} in ({pct(a['cached_share'])} from cache) · {a['per_reply_out']} out incl. thinking ({a['thoughtsTokens']} thinking tokens over {a['replies']} replies)"] if (a := summary.get("agent_tokens")) else []),
         f"- Axis means (1-10): " + ", ".join(f"{k} {v}" for k, v in summary["axis_means"].items()),
         "",
         "## By type",
@@ -79,6 +85,9 @@ def render_comparison(before: dict, after: dict) -> str:
         "|---|---|---|",
         f"| Pass rate | {pct(before['pass_rate'])} | {pct(after['pass_rate'])} |",
         f"| Tool-call accuracy | {pct(before.get('tool_call_accuracy'))} | {pct(after.get('tool_call_accuracy'))} |",
+        f"| Agent model | {(before.get('agent_tokens') or {}).get('model', '—')} | {(after.get('agent_tokens') or {}).get('model', '—')} |",
+        f"| Agent tokens per reply in / out (incl. thinking) | {_tok(before)} | {_tok(after)} |",
+        f"| Input served from cache | {pct((before.get('agent_tokens') or {}).get('cached_share'))} | {pct((after.get('agent_tokens') or {}).get('cached_share'))} |",
         f"| Scenarios passing every trial | {before['scenarios_all_passed']}/{before['scenarios_total']} | {after['scenarios_all_passed']}/{after['scenarios_total']} |",
         f"| Agent errors / turns | {before['agent_errors']}/{before['agent_turns']} | {after['agent_errors']}/{after['agent_turns']} |",
         f"| Replies cut off mid-sentence | {before.get('truncated_replies', '—')}/{before['agent_turns']} | {after.get('truncated_replies', '—')}/{after['agent_turns']} |",

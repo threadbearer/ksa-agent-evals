@@ -72,6 +72,7 @@ def build_trial_graph(caller: CallerFn, agent: AgentClient, judge: JudgeFn):
                 error=None,
                 tool_calls=reply.tool_calls,
                 declared_tools=reply.declared_tools,
+                usage=reply.usage,
             )
             ended = None
         except AgentError as err:

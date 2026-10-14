@@ -21,6 +21,7 @@ class Turn(TypedDict, total=False):
     error: str | None
     tool_calls: list[dict] | None
     declared_tools: list[dict] | None
+    usage: dict | None
 
 
 @dataclass
