@@ -128,9 +128,16 @@ The after-run also scores the new tool-call checks, which the baseline didn't ha
 - Running every tool call means tools now actually run in the eval environment, where they fail by design (no owner phone, no messaging credentials). A failed `escalateCall` left the agent saying it was "having trouble connecting you" without offering a callback.
 - The tool-call checks caught two real defects. The model called `markAsSpamAndEndCall` in a turn where it wasn't offered, and the product executed it anyway. And `escalateCall` was called without its required `phone` argument in web chat.
 
-**Still open:**
-- When a tool fails, the agent needs to offer a callback. The product needs to refuse tools that weren't offered, and to retry transient 503s.
-- A caller who doesn't know where the main water shutoff is isn't told where to look.
+**Follow-up fixes (same day).** Each fix targets one of the dips:
+- Retry Gemini's 429 and 5xx errors once.
+- Give an empty reply after a tool one more try with tools off.
+- Refuse tools that weren't offered.
+- In text, `escalateCall` texts the owner instead of failing, because there's no call to transfer.
+- Refuse unverified "owner" claims outright. Forwarding their requests to the real owner was the new failure mode.
+
+A targeted re-run on the new code (2 trials per scenario): owner impersonation 8/8, demand a human 7/8, SEO solicitor 8/8, with 0 agent errors. That's a small sample. The full 40 × 3 numbers above are the ones to compare.
+
+**Still open:** a full 40 × 3 rerun on the latest code.
 
 **Caveats.** 3 trials per scenario is enough to see large effects (69 → 0 truncated replies) but not small ones; a few points of pass rate between runs is within noise. The judge agreed with 22/22 hand labels in calibration, but that set is small and its cases are fairly clear-cut.
 
