@@ -26,6 +26,7 @@ Evaluating a non-deterministic agent with another non-deterministic model needs 
 
 - **Criteria, not a vibe score.** Every scenario lists graded criteria with a severity (`critical` / `major` / `minor`), e.g. *"Tells the caller to get everyone out of the home now"* (critical). The judge rules on each one separately, must quote the transcript as evidence, and may only mark `not_applicable` when the situation never came up. A trial fails on any critical or major failure; minor failures are reported but don't fail it.
 - **Deterministic checks backstop the judge** (`checks.py`): did the agent reply at all, did it leak its instructions, does a gas-leak answer actually contain 911 or the utility's number, did a Spanish-speaker scenario get Spanish replies. Gating checks fail a trial regardless of what the judge thinks.
+- **Tool calls are checked too.** The bridge reports every function call the agent's model made and the tools it was offered. Gating checks fail a trial on a call to a tool it wasn't offered, arguments that don't match the declared schema, a scenario-forbidden tool (e.g. `cancelAppointment` for an unverified "owner"), or a claim like "I've booked you" with no successful booking call so far. Tool-call accuracy is reported over the trials where the agent used a tool.
 - **Repeats, pass rates, flakiness.** Each scenario runs N times. Results are pass rates, and a scenario that passes some trials and fails others is flagged *flaky* — usually a behavior the prompt only sometimes holds, which a single run would hide.
 - **Judge calibration** (`ksa-evals calibrate`): the judge grades hand-labeled transcripts (`datasets/calibration.jsonl`, including deliberately bad agent replies and a not-applicable case) and reports agreement before its verdicts are trusted.
 - **Ground truth for accuracy.** The judge gets each business's facts (`datasets/businesses.json`, mirrored from the eval tenants' knowledge base), so an invented price or policy is an accuracy failure, not a judgment call.
@@ -96,10 +97,26 @@ Three full runs, 40 scenarios × 3 trials each, against the same eval tenants (O
 
 **The harness found bugs in itself, too.** The first baseline reported a 17% pass rate on prompt injection; all ten "leaks" were the agent correctly refusing ("I can't share my system prompt") and tripping a check that matched the phrase itself. The check was fixed and the stored run re-scored (`ksa-evals rescore`) without re-running the agent — that's the 71% → 79% "Shipped" baseline above. Two trials errored because the judge skipped a criterion; the judge now gets a per-scenario schema with one required field per criterion, and harness errors went to 0.
 
-**Still open (found, not yet fixed):**
-- When a safety script fires (gas, sparking outlet), the agent repeats the same paragraph every turn and never answers "when can someone come?" — emergency scenarios pass 42%.
-- The roofing agent never warns about water next to a light fixture.
-- Some angry customers are still promised free return visits without a stated warranty.
+**Fixing what the exam found (October 13, partial results).** Three failures from the runs above, plus one the next baseline exposed:
+
+- The safety script fired again on every turn, because the prompt said to call the safety tool whenever a hazard was described. It also fired the electrical script, 911 included, for water spreading toward a fridge. Now the script is read once, the tool is withdrawn after that, and the agent moves on to booking the emergency visit.
+- Water next to a light fixture or appliance now gets "don't touch it, switch off its breaker only from a dry spot". It isn't treated as a 911 event.
+- Refunds, credits and free return visits are only offered when the business's facts say so. Otherwise the agent says it will flag the request for the owner.
+- In chat the agent said "one moment while I check" and then nothing happened. The product ran only the first tool call of a reply, so a second lookup (the address, then the calendar) was dropped. It now runs every call, up to three rounds.
+
+First the eval agents' system prompts were regenerated, since the truncation bug had cut them to one sentence. The baseline on the regenerated prompts was **81%**. The run after the fixes lost most roofing trials partway through, when the API key ran out of prepaid credit. Here are the like-for-like numbers on the clean HVAC, plumbing and electrical trials:
+
+| | Before | After |
+|---|---|---|
+| Pass rate (clean trials, 3 trades) | 72/89 (81%) | 83/89 (93%) |
+| Angry repeat customer | 4/9 | 9/9 |
+| Electrical emergency | 0/3 | 3/3 |
+| Spanish speaker | 6/9 | 9/9 |
+
+The one clean roofing emergency trial passed (0/3 before). The tool-round fix landed after this run and has only been unit-tested. A full 40 × 3 rerun is pending.
+
+**Still open:**
+- A caller who doesn't know where the main water shutoff is isn't told where to look.
 
 **Caveats.** 3 trials per scenario is enough to see large effects (69 → 0 truncated replies) but not small ones; a few points of pass rate between runs is within noise. The judge agreed with 22/22 hand labels in calibration, but that set is small and its cases are fairly clear-cut.
 
