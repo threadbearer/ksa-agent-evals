@@ -103,7 +103,7 @@ def scenario_schema(scenario: Scenario) -> type[BaseModel]:
 
 
 def make_llm_judge(model: str, api_key: str | None) -> JudgeFn:
-    base = ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=api_key)
+    base = ChatGoogleGenerativeAI(model=model, temperature=0, google_api_key=api_key, thinking_budget=512)
     structured: dict[str, object] = {}
 
     async def judge(scenario: Scenario, business: Business, transcript: list[Turn]) -> Judgment:

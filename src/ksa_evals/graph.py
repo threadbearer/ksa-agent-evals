@@ -18,7 +18,7 @@ from langgraph.graph import END, START, StateGraph
 from .agent_client import AgentClient, AgentError
 from .caller import CallerFn
 from .checks import CheckResult, Turn, run_checks
-from .judge import Judgment, JudgeFn
+from .judge import AxisScores, CriterionVerdict, Judgment, JudgeFn
 from .scenarios import Business, Scenario
 
 EndReason = Literal["caller_hung_up", "agent_error", "max_turns"]
@@ -81,6 +81,27 @@ def build_trial_graph(caller: CallerFn, agent: AgentClient, judge: JudgeFn):
     async def grade_node(state: TrialState) -> dict:
         transcript = state.get("transcript", [])
         checks = run_checks(state["scenario"], transcript)
+
+        # Short-circuit: if the agent errored or failed a deterministic gating check,
+        # the trial has already failed. Skipping the LLM judge saves costly evaluations
+        # on broken or empty transcripts.
+        if state.get("ended_by") == "agent_error" or any(c.gating and not c.passed for c in checks):
+            criteria = [
+                CriterionVerdict(
+                    id=c.id,
+                    verdict="fail" if c.severity in ("critical", "major") else "not_applicable",
+                    evidence="",
+                    reasoning="Trial failed deterministic gating check or agent errored before judge evaluation.",
+                )
+                for c in state["scenario"].criteria
+            ]
+            judgment = Judgment(
+                criteria=criteria,
+                scores=AxisScores(empathy=1, accuracy=1, problem_solving=1, professionalism=1),
+                summary="Trial failed deterministic checks; LLM judge skipped.",
+            )
+            return {"checks": checks, "judgment": judgment, "passed": False}
+
         judgment = await judge(state["scenario"], state["business"], transcript)
         return {"checks": checks, "judgment": judgment, "passed": decide(checks, judgment, state["scenario"])}
 

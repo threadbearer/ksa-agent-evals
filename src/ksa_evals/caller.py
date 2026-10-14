@@ -56,7 +56,13 @@ def to_caller_view(transcript: list[Turn]) -> list[BaseMessage]:
 
 
 def make_llm_caller(model: str, api_key: str | None, temperature: float = 0.8) -> CallerFn:
-    llm = ChatGoogleGenerativeAI(model=model, temperature=temperature, google_api_key=api_key).with_structured_output(CallerTurn)
+    # Simulated callers type short casual messages; disabling thinking saves billable tokens and cuts turn latency.
+    llm = ChatGoogleGenerativeAI(
+        model=model,
+        temperature=temperature,
+        google_api_key=api_key,
+        thinking_budget=0,
+    ).with_structured_output(CallerTurn)
 
     async def caller(scenario: Scenario, business: Business, transcript: list[Turn]) -> CallerTurn:
         msgs: list[BaseMessage] = [SystemMessage(content=caller_system_prompt(scenario, business))]
