@@ -97,25 +97,39 @@ Three full runs, 40 scenarios × 3 trials each, against the same eval tenants (O
 
 **The harness found bugs in itself, too.** The first baseline reported a 17% pass rate on prompt injection; all ten "leaks" were the agent correctly refusing ("I can't share my system prompt") and tripping a check that matched the phrase itself. The check was fixed and the stored run re-scored (`ksa-evals rescore`) without re-running the agent — that's the 71% → 79% "Shipped" baseline above. Two trials errored because the judge skipped a criterion; the judge now gets a per-scenario schema with one required field per criterion, and harness errors went to 0.
 
-**Fixing what the exam found (October 13, partial results).** Three failures from the runs above, plus one the next baseline exposed:
+**Fixing what the exam found (October 14).** Three failures from the runs above, plus two the next baseline exposed:
 
 - The safety script fired again on every turn, because the prompt said to call the safety tool whenever a hazard was described. It also fired the electrical script, 911 included, for water spreading toward a fridge. Now the script is read once, the tool is withdrawn after that, and the agent moves on to booking the emergency visit.
 - Water next to a light fixture or appliance now gets "don't touch it, switch off its breaker only from a dry spot". It isn't treated as a 911 event.
 - Refunds, credits and free return visits are only offered when the business's facts say so. Otherwise the agent says it will flag the request for the owner.
 - In chat the agent said "one moment while I check" and then nothing happened. The product ran only the first tool call of a reply, so a second lookup (the address, then the calendar) was dropped. It now runs every call, up to three rounds.
+- About 3% of replies started with "[Via CHAT]", because history tagged the agent's own past turns with their channel and the model copied the tag. Now only customer turns are tagged, and any echoed tag is stripped.
 
-First the eval agents' system prompts were regenerated, since the truncation bug had cut them to one sentence. The baseline on the regenerated prompts was **81%**. The run after the fixes lost most roofing trials partway through, when the API key ran out of prepaid credit. Here are the like-for-like numbers on the clean HVAC, plumbing and electrical trials:
+The eval agents' system prompts were regenerated first, since the truncation bug had cut them to one sentence. Both runs below use the regenerated prompts, 40 scenarios × 3 trials:
 
-| | Before | After |
+| | Before (baseline) | After the fixes |
 |---|---|---|
-| Pass rate (clean trials, 3 trades) | 72/89 (81%) | 83/89 (93%) |
-| Angry repeat customer | 4/9 | 9/9 |
-| Electrical emergency | 0/3 | 3/3 |
-| Spanish speaker | 6/9 | 9/9 |
+| Pass rate | 81% | **86%** |
+| Emergency | 50% | **92%** |
+| Angry repeat customer | 58% | **100%** |
+| Spanish speaker | 58% | 83% |
+| Prompt injection | 92% | 100% |
+| Demand a human | 92% | 67% |
+| Owner impersonation | 92% | 75% |
+| SEO solicitor | 100% | 75% |
+| Replies starting "[Via CHAT]" | 15 / 434 | 0 / 423 |
+| Tool-call accuracy | not measured | 92.5% (37/40 trials that used tools, 69 calls) |
+| Latency p50 / p95 | 2.81s / 4.49s | 2.88s / 4.44s |
 
-The one clean roofing emergency trial passed (0/3 before). The tool-round fix landed after this run and has only been unit-tested. A full 40 × 3 rerun is pending.
+The after-run also scores the new tool-call checks, which the baseline didn't have. No trial failed on those checks alone, so the pass rates compare like for like.
+
+**What the dips are.** These three types dropped by 1 to 3 trials each.
+- Two of their failures were Gemini returning 503 and two were empty replies; the product doesn't retry either.
+- Running every tool call means tools now actually run in the eval environment, where they fail by design (no owner phone, no messaging credentials). A failed `escalateCall` left the agent saying it was "having trouble connecting you" without offering a callback.
+- The tool-call checks caught two real defects. The model called `markAsSpamAndEndCall` in a turn where it wasn't offered, and the product executed it anyway. And `escalateCall` was called without its required `phone` argument in web chat.
 
 **Still open:**
+- When a tool fails, the agent needs to offer a callback. The product needs to refuse tools that weren't offered, and to retry transient 503s.
 - A caller who doesn't know where the main water shutoff is isn't told where to look.
 
 **Caveats.** 3 trials per scenario is enough to see large effects (69 → 0 truncated replies) but not small ones; a few points of pass rate between runs is within noise. The judge agreed with 22/22 hand labels in calibration, but that set is small and its cases are fairly clear-cut.
