@@ -121,7 +121,11 @@ The eval agents' system prompts were regenerated first, since the truncation bug
 | Tool-call accuracy | not measured | 92.5% (37/40 trials that used tools, 69 calls) |
 | Latency p50 / p95 | 2.81s / 4.49s | 2.88s / 4.44s |
 
-The after-run also scores the new tool-call checks, which the baseline didn't have. No trial failed on those checks alone, so the pass rates compare like for like.
+**How comparable the two runs are.** The after-run differs from the baseline in more than the agent:
+- **New tool-call checks.** They gate trials, so the after-run is held to a stricter standard. Three after-run trials failed on those checks alone, so excluding them the after-run passes between 86% and 88%.
+- **A lighter harness configuration.** Between the two runs the harness was switched to save API cost: the simulated caller runs with thinking off, the judge's thinking is capped at 512 tokens, and the judge is skipped once a deterministic check has already failed the trial.
+
+The large per-type effects line up with failure modes that were observed and then fixed directly, so they're unlikely to come from the harness change: emergency 50% → 92%, angry customers 58% → 100%. The 5-point overall change is within what an instrument change could move. A rerun of both versions under one configuration is still to do.
 
 **What the dips are.** These three types dropped by 1 to 3 trials each.
 - Two of their failures were Gemini returning 503 and two were empty replies; the product doesn't retry either.
